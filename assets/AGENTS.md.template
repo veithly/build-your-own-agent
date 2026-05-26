@@ -1,0 +1,77 @@
+# Agent architecture
+
+This file is the architecture contract for `$project_name`.
+Update it before changing loop, context, tools, verifier, memory, skills, sandbox, or task-progress behavior.
+
+## Project profile
+
+- Domain: $domain
+- Target platform: $platform
+- LLM provider: $provider
+- Deployment shape: $deployment
+- Multi-tenant: $multi_tenant
+- User-installable skills: $user_installable_skills
+- Long-running session: $long_running
+
+## Axis decisions
+
+- Loop shape: $loop
+  - Why: turn boundaries, replay, retry, and audit must stay explicit from day 1.
+- Context shape: $context
+  - Why: stable layers must remain byte-identical above the cache boundary.
+- Tool dispatch: $tools
+  - Why: dispatch is isolated behind permission gates and bounded tool results.
+- Verifier strategy: $verifier
+  - Why: completion needs external truth, budget pressure, and model self-stop signals.
+- Memory architecture: $memory
+  - Why: prompt-visible memory must be frozen at turn start.
+- Skill system: $skills
+  - Why: skills are content; executable code is supply chain.
+- Sandbox: $sandbox
+  - Why: shell-class tools need OS boundaries before model-level trust.
+- Task progress surface: $task_progress
+  - Why: current execution focus must survive long turns, resume, and compaction without becoming long-term memory.
+
+## Tool catalog
+
+| Tool name | What it does | Sandbox? | Approval gate? | Wraps result? |
+|-----------|--------------|----------|----------------|---------------|
+| shell.exec | run shell command | yes | default deny dangerous ops | no for own stdout |
+| progress.update | update current execution todo state | n/a | no | n/a |
+
+Add every new tool here before exposing it to the model.
+
+## Verifier signal
+
+- Hard signal: `$test_cmd_display`
+- Soft signal: `AGENT_TOKEN_BUDGET`, default `200000`, with 90 percent threshold.
+- Give-up signal: no tool use and assistant text present.
+
+## Out of scope
+
+- Unscanned user-installable skills.
+- Multi-tenant data sharing or shared memory files.
+- Unsandboxed shell execution in production.
+
+## Deviations from 10 Iron Laws
+
+No approved deviations. Add a dated entry here before shipping any deviation.
+
+## Operational targets
+
+- max_turns_per_session: 50
+- max_tokens_per_session: 200000
+- max_cost_per_session_usd: 5.00
+- max_tool_calls_per_turn: 10
+- max_subagent_depth: 2
+- max_stale_progress_turns: 10
+- p95 turn latency target: 3000 ms
+- p95 tool latency target: 5000 ms
+
+## Local gates
+
+```bash
+python scripts/lint-agent-design.py .
+python -m pytest -ra
+python scripts/diagnose-agent.py ~/.$project_slug/rollouts/ --allow-empty
+```

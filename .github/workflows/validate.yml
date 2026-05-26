@@ -1,0 +1,32 @@
+name: Validate skill
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Smoke scaffold generation
+        run: |
+          python scripts/init-agent-project.py tmp-smoke-agent --profile coding-cli --test-cmd "python -m pytest -ra"
+          python tmp-smoke-agent/scripts/lint-agent-design.py tmp-smoke-agent
+
+      - name: Smoke runtime diagnosis
+        run: |
+          mkdir -p tmp-empty-rollouts
+          python scripts/diagnose-agent.py tmp-empty-rollouts --allow-empty

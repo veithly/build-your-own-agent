@@ -1,0 +1,31 @@
+# $project_name
+
+Agent harness initialized from the `build-your-own-agent` skill.
+
+## Quick Start
+
+```bash
+python -m pip install -e ".[dev]"
+$project_slug "hello"
+```
+
+## Architecture
+
+See `AGENTS.md` for axis decisions, tool catalog, task-progress surface, verifier signal, safety deviations, and operational targets.
+
+## Verification
+
+```bash
+python scripts/lint-agent-design.py .
+python -m pytest -ra
+python scripts/diagnose-agent.py ~/.$project_slug/rollouts/ --allow-empty
+```
+
+## Runtime Files
+
+By default runtime JSONL files live under `~/.$project_slug/`:
+
+- `rollouts/` for turn replay
+- `metrics.jsonl` for per-turn metrics
+- `audit.jsonl` for security/audit events
+- `memory.jsonl` for append-only memory

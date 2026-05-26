@@ -1,0 +1,80 @@
+name: agent-lint-and-diagnose
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: 10 Iron Laws lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Lint agent design
+        run: |
+          python scripts/lint-agent-design.py . --format json > lint-report.json
+          cat lint-report.json
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: lint-report.json
+
+  test:
+    name: pytest + smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install -e ".[dev]"
+      - name: Run tests
+        run: |
+          python -m pytest -ra --cov=core --cov=memory --cov=security --cov=rollout
+      - name: Run security smoke
+        run: |
+          python -m pytest -m security -v
+
+  diagnose:
+    name: runtime diagnosis (on cron)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Download production rollouts
+        run: |
+          # Replace with your real rollout download (S3, GCS, etc.)
+          echo "TODO: aws s3 sync s3://my-agent-rollouts/ /tmp/rollouts/"
+          mkdir -p /tmp/rollouts
+      - name: Diagnose
+        run: |
+          python scripts/diagnose-agent.py /tmp/rollouts/ --format json --allow-empty > diagnose-report.json || true
+          cat diagnose-report.json
+      - name: Upload diagnose report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnose-report
+          path: diagnose-report.json
+      - name: Alert on findings
+        run: |
+          findings=$(python -c "import json; print(len(json.load(open('diagnose-report.json'))['findings']))")
+          if [ "$findings" -gt 0 ]; then
+            echo "::warning::diagnose-agent.py found $findings anti-pattern(s); see report"
+            exit 1
+          fi
