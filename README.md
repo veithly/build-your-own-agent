@@ -2,7 +2,7 @@
 
 `build-your-own-agent` is a source-grounded skill for designing, building, and diagnosing agent harnesses. It distills the engineering patterns from Codex, Claude Code, OpenClaw, and Hermes into a loadable skill plus scripts and references.
 
-Public book site: <https://veithly.github.io>
+Public book site: <https://agent-architecture-patterns.pages.dev>
 
 ## What It Covers
 
