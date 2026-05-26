@@ -183,7 +183,7 @@ If your target user base is Chinese-speaking:
 - This skill: architecture (English-primary)
 - claude-skills-zh-cn: Chinese-language patterns
 
-Both reference the same source book ([agent-architecture-patterns.pages.dev](https://agent-architecture-patterns.pages.dev)), which is bilingual.
+Both reference the same source book ([harness-architecture.pages.dev](https://harness-architecture.pages.dev)), which is bilingual.
 
 ## Anti-pattern: skill stacking
 
