@@ -1,6 +1,6 @@
 ---
 name: build-your-own-agent
-description: Use when building or designing an agent harness; choosing between Codex, Claude Code, OpenClaw, or Hermes patterns; designing agent loop, subagents, todo/task progress surfaces, execution-state routing, memory, skills, cron, sandbox, or security; diagnosing slow, expensive, leaky, looping, or unsafe agents; or preparing for agent-infra interviews.
+description: Use when building or designing an agent harness; applying loop engineering (budgets, stop conditions, error breakers, trajectories) or graph engineering (delegation, orchestrator-workers, human-in-the-loop, subagent guardrails); choosing between Codex, Claude Code, OpenClaw, or Hermes patterns; designing agent loop, subagents, todo/task progress surfaces, execution-state routing, memory, skills, cron, sandbox, or security; diagnosing slow, expensive, leaky, looping, or unsafe agents; or preparing for agent-infra interviews.
 license: Complete terms in LICENSE.txt
 ---
 
@@ -11,7 +11,16 @@ A skill for two related jobs:
 1. **Build**: design a production-grade agent harness from zero.
 2. **Diagnose & Optimize**: audit an existing agent against the same rules and fix what's wrong.
 
-Both jobs share the same vocabulary — the 10 Iron Laws + 8 spectrum axes — distilled from Codex, Claude Code (2.1.88 expanded build), OpenClaw, and Hermes.
+Both jobs share the same vocabulary — 2 core methods (loop engineering, graph engineering) + the 10 Iron Laws + 9 spectrum axes — distilled from Codex, Claude Code (2.1.88 expanded build), OpenClaw, and Hermes, plus first-hand source reading of mini-swe-agent, smolagents, crewAI, and the open-source Codex.
+
+## The two core methods
+
+Everything in this skill hangs off two questions. Answer them in order.
+
+1. **Loop engineering** — how does ONE agent loop stay alive in production? Five components: multi-signal stop conditions, 3-dimension budgets (steps / dollars / wall-clock) with a grace call, error taxonomy + consecutive breaker, trajectory persistence, verifier tiers. Method: `references/loop-engineering.md`. Laws 1 and 4 are its checkpoints; the scaffold's `core/loop.py` (`LoopBudget`) implements it.
+2. **Graph engineering** — when a job outgrows one loop, how is work organized across agent / code / tool / human nodes? Default answer is "don't split"; when you do, every edge carries the 5-element contract (goal, context, permissions, budget, output format) and permissions only narrow. Method: `references/graph-engineering.md`. Axis 9 in `references/picking-from-spectrum.md` is its decision tree.
+
+The 10 Iron Laws below are the enforcement layer for both methods.
 
 ## When to load this skill
 
@@ -29,9 +38,11 @@ Do NOT load for: simple agent questions (e.g. "what is an LLM agent"), library q
 
 | File | Purpose | Load when |
 |------|---------|-----------|
+| `references/loop-engineering.md` | 5-component method for one production loop, contracts + anti-patterns | designing or reviewing any agent loop |
+| `references/graph-engineering.md` | organizing work across agent/code/tool/human nodes; edge contract + guardrails | any delegation, subagent, or multi-agent decision |
 | `references/build-agent-workflow.md` | 5-phase end-to-end build flow + per-step source-backed picks | user wants to build from scratch |
 | `references/diagnose-agent.md` | 4 diagnosis flows + anti-pattern → fix map | user has an existing agent to audit/improve |
-| `references/picking-from-spectrum.md` | 8-axis decision tree for design choices | user needs to pick between Codex / Claude Code / OpenClaw / Hermes patterns |
+| `references/picking-from-spectrum.md` | 9-axis decision tree for design choices | user needs to pick between Codex / Claude Code / OpenClaw / Hermes patterns |
 | `references/agent-scaffold.md` | standard Python scaffold and smoke-test checklist | user starts implementing or needs file-level rationale |
 | `references/migration-guide.md` | 10-stage refactor for legacy agents (1-3 days each) | user has a working agent that breaks rules |
 | `references/security-checklist.md` | 5-layer defense stack | before any production deploy |
@@ -70,7 +81,7 @@ Each law maps to one chapter §11 in the book at `docs-site/src/content/docs/pat
 
 ```
 Phase 1 · Pick architecture        →  references/picking-from-spectrum.md
-   ↓     (answer 8 axes: loop / context / dispatch / verifier / memory / skill / sandbox / task progress; use execution-state routing when progress has multiple audiences)
+   ↓     (answer 9 axes: loop / context / dispatch / verifier / memory / skill / sandbox / task progress / delegation topology; use execution-state routing when progress has multiple audiences)
 Phase 2 · Initialize scaffold      →  scripts/init-agent-project.py + references/agent-scaffold.md
    ↓     (generate standard files, including progress/todo.py, then adapt with file-level rationale)
 Phase 3 · Wire 5-layer defense     →  references/security-checklist.md
@@ -128,6 +139,12 @@ For each design dimension, start from the source system with the clearest implem
 | Task progress surface | Codex `update_plan` + Claude Code `TodoWrite` / Tasks V2 + Hermes `todo` | docs-site §21 + `REF/codex/codex-rs/protocol/src/plan_tool.rs` + `REF/claude-code-2.1.88-expanded/src/tools/TodoWriteTool/` + `REF/hermes-agent/tools/todo_tool.py` |
 | Execution state routing | Codex MCP progress + Claude Code SDK progress events + OpenClaw projector + Hermes `tool_progress` modes | docs-site §22 + `REF/codex/codex-rs/app-server-protocol/src/protocol/v2/mcp.rs` + `REF/claude-code-2.1.88-expanded/src/entrypoints/sdk/coreSchemas.ts` + `REF/openclaw/src/auto-reply/reply/acp-projector.ts` + `REF/hermes-agent/gateway/display_config.py` |
 | MCP integration | Codex `mcp.rs` + `mcp_tool_*.rs` | `REF/codex/codex-rs/core/src/mcp*.rs` |
+| Minimal production loop (191 lines) | mini-swe-agent (3-dim budget, breaker, exit-as-message) | `research/mini-swe-agent/src/minisweagent/agents/default.py` @ `a83fcae` |
+| Structured stop + completion checks | smolagents (`final_answer` tool + `final_answer_checks`) | `research/smolagents/src/smolagents/agents.py` @ `e3a5b89` |
+| Periodic re-planning | smolagents `planning_interval` | same file, `_generate_planning_step` |
+| Delegation edge + return payload | crewAI `DelegateWorkTool` + smolagents managed-agent report | `research/crewAI/.../delegate_work_tool.py` @ `f15844b` |
+| Recursion ban at construction | open-source Codex `MultiAgentVersion::Disabled` | `research/codex/codex-rs/core/src/codex_delegate.rs` L143 @ `fa1d4c4` |
+| Orchestrator effort scale | Anthropic multi-agent research system | `references/graph-engineering.md` § Five topologies |
 
 Decision trees per dimension: `references/picking-from-spectrum.md`. The pattern is always: **pick the simplest one that meets your constraint, copy verbatim, adapt only what doesn't fit**.
 
@@ -181,4 +198,4 @@ If you discover a new pattern not covered:
 5. If it's runtime-detectable, add a check to `scripts/diagnose-agent.py`.
 6. Update this `SKILL.md` index only if a new top-level file is needed.
 
-Reading order for first-time skill users: this file → `references/build-agent-workflow.md` (if building) or `references/diagnose-agent.md` (if diagnosing) → `references/picking-from-spectrum.md` (when stuck on a decision).
+Reading order for first-time skill users: this file → `references/loop-engineering.md` + `references/graph-engineering.md` (the two methods everything else serves) → `references/build-agent-workflow.md` (if building) or `references/diagnose-agent.md` (if diagnosing) → `references/picking-from-spectrum.md` (when stuck on a decision).

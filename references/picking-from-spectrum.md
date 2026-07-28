@@ -12,6 +12,7 @@ Each section maps one design axis to a decision tree. Pick a leaf and copy the c
 - Axis 6 · Skill system (bundled / admin-managed / scanner+trust-matrix)
 - Axis 7 · Sandbox / runtime defense (per-OS / network-deny / fs-restricted)
 - Axis 8 · Task progress surface and execution-state routing (checklist / task board / runtime events / compaction focus / multi-surface router)
+- Axis 9 · Delegation topology (single loop / pipeline / orchestrator-workers / review loop)
 - Worked examples (Codex-like coding agent / Cursor-like IDE agent / personal long-running)
 
 ## Axis 1 · Loop shape
@@ -197,6 +198,39 @@ Do you need to show different progress to model context, users, operators, logs,
        → only summarized, unfinished execution state re-enters model context
        → add per-platform display density: off / new / all / verbose
 ```
+
+## Axis 9 · Delegation topology (single loop / pipeline / orchestrator-workers / review loop)
+
+> Reference: `references/graph-engineering.md`; book §10 (Subagents), §12 (Permissions). Sources: crewAI `Process` (`f15844b`), Codex `codex_delegate.rs` (`fa1d4c4`), Anthropic multi-agent research system.
+
+```
+Can one loop + a good toolset finish the job without context poisoning?
+├── Yes → NO delegation. Single loop. (Default answer. Every edge is a context
+│         retelling; multi-agent multiplies token cost — Anthropic: token usage
+│         explains 80% of multi-agent performance variance.)
+└── No → which signal forced the split?
+    ├── Steps are fixed and known in advance
+    │      → pipeline + gates (crewAI Process.sequential)
+    │      → freeze steps into code nodes; agent nodes only where paths vary
+    ├── Subtasks unknowable until runtime (breadth-first research, multi-file refactor)
+    │      → orchestrator-workers (crewAI Process.hierarchical + check_manager_llm)
+    │      → orchestrator prompt carries the effort scale:
+    │        simple = 1 agent / 3-10 tool calls; comparison = 2-4 workers;
+    │        complex = 10+ workers with divided responsibilities
+    ├── Output needs multi-pass quality with clear criteria
+    │      → review loop (evaluator-optimizer) with a hard round cap
+    └── A human must approve / decide mid-flow
+           → human node via tool call (request_approval / ask_human)
+           → parent session owns all approval UI; timeout + fallback required
+```
+
+Non-negotiable guardrails once you delegate (all in code, never in prompts):
+
+- Every edge carries the 5-element contract: goal, context, permissions, budget, output format.
+- Permissions only narrow across edges (Codex `inherited_exec_policy`, L130).
+- Recursion ban: the delegation tool is not passed to children (Codex `MultiAgentVersion::Disabled`, L143; Hermes 5-tool hard block).
+- Depth cap ≤ 2, concurrency cap, budget ceilings inherited from the parent.
+- Return payload = conclusion + evidence (smolagents report + `summary_of_work` pattern).
 
 ## Worked example · "Build me a Codex-like coding agent"
 

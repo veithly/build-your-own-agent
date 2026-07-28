@@ -412,6 +412,48 @@ def check_p1(root: Path, files: dict[str, str], blob: str) -> Outcome:
     )
 
 
+def check_p2(blob: str) -> Outcome:
+    title = "Loop budget & graceful exhaustion"
+    # Three budget dimensions (mini-swe-agent AgentConfig pattern).
+    has_step_budget = "max_turns" in blob or "step_limit" in blob or "max_steps" in blob
+    has_cost_budget = "cost_limit" in blob or "max_cost" in blob or "cost_usd" in blob
+    has_wall_budget = "wall_time" in blob or "wall_seconds" in blob or "max_wall" in blob
+    # Graceful exhaustion (grace call / budget_exceeded transition).
+    has_grace = "budget_exceeded" in blob or "grace" in blob.lower()
+    # Consecutive-error circuit breaker.
+    has_breaker = "consecutive" in blob.lower() or "error_streak" in blob
+
+    if has_step_budget and has_cost_budget and has_wall_budget and has_grace and has_breaker:
+        return Outcome(
+            "P2",
+            title,
+            "pass",
+            "3-dimension budget (steps/cost/wall-time), grace exhaustion, and consecutive-error breaker found",
+        )
+
+    missing = []
+    if not has_step_budget:
+        missing.append("step budget")
+    if not has_cost_budget:
+        missing.append("cost budget (dollars)")
+    if not has_wall_budget:
+        missing.append("wall-time budget")
+    if not has_grace:
+        missing.append("grace call / budget_exceeded transition")
+    if not has_breaker:
+        missing.append("consecutive-error circuit breaker")
+
+    return Outcome(
+        "P2",
+        title,
+        "advice",
+        "missing: " + ", ".join(missing),
+        "Adopt the LoopBudget pattern: steps + dollars + wall-clock checked before each model call, "
+        "one grace turn on exhaustion, breaker on consecutive same-class errors.",
+        "references/loop-engineering.md; mini-swe-agent default.py (a83fcae); smolagents _handle_max_steps_reached",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -440,6 +482,7 @@ def lint(root: Path, only: set[str] | None = None) -> LintReport:
         ("R9", lambda: check_r9(root, blob)),
         ("R10", lambda: check_r10(root)),
         ("P1", lambda: check_p1(root, files, blob)),
+        ("P2", lambda: check_p2(blob)),
     ]
     for rid, runner in runners:
         if only and rid not in only:
@@ -451,7 +494,7 @@ def lint(root: Path, only: set[str] | None = None) -> LintReport:
                 r = _rule(rid)
                 outcome = Outcome(rid, r.title, "fail", f"linter internal error: {e!r}", r.fix, r.reference)
             else:
-                outcome = Outcome(rid, "Task progress surface", "advice", f"advisory internal error: {e!r}")
+                outcome = Outcome(rid, "Advisory check", "advice", f"advisory internal error: {e!r}")
         report.add(outcome)
     return report
 

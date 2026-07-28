@@ -113,6 +113,60 @@ def test_run_loop_writes_final_transition(tmp_path, monkeypatch):
     assert record["transition_reason"] == "verified"
 
 
+def test_cost_budget_triggers_grace_turn(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_ROLLOUT_DIR", str(tmp_path / "rollouts"))
+    monkeypatch.setenv("AGENT_METRICS_FILE", str(tmp_path / "metrics.jsonl"))
+    import observability.metrics as metrics_module
+    import rollout.writer as writer_module
+
+    importlib.reload(metrics_module)
+    importlib.reload(writer_module)
+    from core.loop import LoopBudget, run_loop
+
+    # A failing test command keeps verify_hard False, so the agent never
+    # declares victory and must run until the cost cap forces a grace turn.
+    monkeypatch.setenv("AGENT_TEST_CMD", "false")
+
+    # Each turn keeps calling a tool and costs $1; a $2 cap must force a
+    # grace turn (budget_exceeded) instead of running forever.
+    def never_done(_msgs):
+        return {"text": "working", "tool_uses": [{"name": "noop", "input": {}}], "cost_usd": 1.0}
+
+    budget = LoopBudget(max_turns=50, max_cost_usd=2.0)
+    turns = run_loop("budget-session", "go", never_done, budget=budget)
+    assert turns[-1].transition_reason == "budget_exceeded"
+    # The grace turn must not dispatch new tool calls.
+    assert turns[-1].tool_results == []
+
+
+def test_consecutive_errors_trip_circuit_breaker(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_ROLLOUT_DIR", str(tmp_path / "rollouts"))
+    monkeypatch.setenv("AGENT_METRICS_FILE", str(tmp_path / "metrics.jsonl"))
+    import core.tools as tools_module
+    import observability.metrics as metrics_module
+    import rollout.writer as writer_module
+
+    importlib.reload(metrics_module)
+    importlib.reload(writer_module)
+    from core.loop import LoopBudget, run_loop
+
+    # Force every dispatch to error so the breaker (3 in a row) must fire.
+    monkeypatch.setattr(
+        tools_module, "dispatch_tool_uses", lambda uses: [{"error": "boom"} for _ in uses]
+    )
+    import core.loop as loop_module
+
+    importlib.reload(loop_module)
+
+    def always_tool(_msgs):
+        return {"text": "retry", "tool_uses": [{"name": "noop", "input": {}}]}
+
+    budget = LoopBudget(max_turns=50, max_cost_usd=0, max_consecutive_errors=3)
+    turns = loop_module.run_loop("breaker-session", "go", always_tool, budget=budget)
+    assert turns[-1].transition_reason == "repeated_errors"
+    assert len(turns) <= 3
+
+
 def test_todo_progress_surface():
     from progress.todo import TodoItem, TodoStore
 

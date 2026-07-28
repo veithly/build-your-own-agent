@@ -109,6 +109,9 @@ Open `picking-from-spectrum.md` and **answer one pick per axis** in your project
 | Skill system | bundled / admin / scanner / wild-west | Codex (core-skills) | Claude Code (17 bundled + admin) | Hermes (INSTALL_POLICY) |
 | Sandbox | per-OS / network-deny / fs-restricted | Codex (3 implementations) | Codex sandbox + canUseTool | OS sandbox + tirith |
 | Task progress | checklist / task board / runtime events / compaction focus / execution-state router | Codex update_plan | Claude Code TodoWrite + Tasks V2 | Hermes todo + §22 router |
+| Delegation topology | single loop / pipeline / orchestrator-workers / review loop | single loop (subagents out of scope in v1) | single loop + review loop | single loop, delegate_task only when forced |
+
+Loop and delegation topology are the two "core method" axes — decide them with `references/loop-engineering.md` and `references/graph-engineering.md`, not just the one-liner table above.
 
 If your project's profile doesn't match any of the three defaults, walk each axis individually in `picking-from-spectrum.md`. Do not pick by intuition; pick by tree.
 
@@ -192,12 +195,14 @@ for the generated file map and adapt the generated files:
 
 For each file, the must-do list. Cross-reference `agent-scaffold.md` for the map and `assets/scaffold/` for the canonical Python source.
 
-#### `core/loop.py` — Law 1 + Law 4
+#### `core/loop.py` — Law 1 + Law 4 + loop-engineering method
 
 - Each iteration = exactly one LLM call + the tool dispatches it produced. No nested LLM calls.
-- `turn.transition_reason` is set before the loop breaks. Values: `verified`, `model_done`, `no_more_tools`, `budget_exceeded`, `interrupted`.
+- `turn.transition_reason` is set before the loop breaks. Values: `verified`, `model_done`, `no_more_tools`, `budget_exceeded`, `repeated_errors`, `interrupted`.
 - `rollout.write(turn)` is called before `turns.append(turn)`. This way a crash mid-append still has the turn on disk.
 - The verifier check ordering matters: `verify_hard` AND `verify_soft` before checking `verify_giveup`. Hard signals override give-up.
+- **Budget is `LoopBudget`, not a bare `max_turns`.** Three dimensions (steps / dollars `max_cost_usd` / `max_wall_seconds`) checked BEFORE each model call. On exhaustion, run exactly one grace turn (inject a summary prompt, dispatch no new tools) then break with `budget_exceeded`. Pattern: mini-swe-agent (`a83fcae`) + smolagents `_handle_max_steps_reached`.
+- **Consecutive-error circuit breaker.** Count same-class failures in a row; any clean dispatch resets. Break with `repeated_errors` at the cap. Do not retry a failing tool forever.
 
 #### `core/prompt.py` — Law 2 + Law 8
 
